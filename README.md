@@ -1,2 +1,4 @@
-# learning_ai
-The (almost) complete collection of assignments for the ai portfolio 
+# KI-Portfolio
+
+Hier könnte ihre Beschreibung stehen
+
