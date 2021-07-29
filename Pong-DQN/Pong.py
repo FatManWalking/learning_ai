@@ -21,6 +21,16 @@ import pygame
 import sys
 import random
 from math import *
+import torch
+import Bild
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from collections import deque
+from random import random, randint, sample
+from typing import Callable
+import time
 
 pygame.init()
 
@@ -72,6 +82,7 @@ def rulebased(ball):
 
     leftPaddle.move(leftChange)
 
+# Hier beginnt die Funktionalität des übernommenen Pong-Spiel
 
 # Draw the Boundary of Board
 def boundary():
@@ -97,7 +108,7 @@ class Paddle:
     def __init__(self, position):
         self.w = 10
         self.h = self.w*8
-        self.paddleSpeed = 6
+        self.paddleSpeed = 50
             
         if position == -1:
             self.x = 1.5*margin
@@ -129,11 +140,11 @@ class Ball:
         self.x = width/2 - self.r/2
         self.y = height/2 -self.r/2
         self.color = color
-        self.angle = random.randint(-75, 75)
-        if random.randint(0, 1):
+        self.angle = randint(-75, 75)
+        if randint(0, 1):
             self.angle += 180
         
-        self.speed = 8
+        self.speed = 60
 
     # Show the Ball
     def show(self):
@@ -267,6 +278,7 @@ def board():
         rightPaddle.move(rightChange)
         ball.move()
         rulebased(ball)
+        
         ball.checkForPaddle() 
         
         display.fill(background)
@@ -283,4 +295,169 @@ def board():
         pygame.display.update()
         clock.tick(60)
 
-board()
+def tick_board(ball):
+
+    ball.move()
+    rulebased(ball)
+    pygame.time.wait(30)
+    return torch.FloatTensor([ball.y, ball.x, ball.angle, leftPaddle.y, rightPaddle.x])
+
+def after_tick(ball):
+    
+    ball.checkForPaddle() 
+    
+    display.fill(background)
+    showScore()
+
+    ball.show()
+    leftPaddle.show()
+    rightPaddle.show()
+    global scoreRight, scoreLeft
+    score = scoreRight - scoreLeft
+    scoreRight, scoreLeft = 0, 0
+    if rightPaddle.y - 30 <= ball.y <= rightPaddle.y + 30:
+        matching = 1
+    else:
+        matching = 0
+
+    boundary()
+    
+    pygame.display.update()
+    clock.tick(60)
+    pygame.time.wait(30)
+    return score, matching
+    
+# Dieser Aufruf startet das Spiel
+# board()
+
+
+class Model(nn.Module):
+    
+    def __init__(self) -> None:
+        super().__init__()
+        
+        self.fc = nn.Sequential(
+            nn.Linear(5, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 3),
+            nn.Tanh(),
+        )
+
+        self._create_weights()
+        for param in self.fc.parameters():
+            param.requires_grad = False
+        
+    def _create_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                nn.init.constant_(m.bias, 0)
+                
+    def forward(self, x):
+        x = self.fc(x)
+
+        return x
+
+class Actor():
+    """individium class"""
+
+    def __init__(self, func: Callable):
+        """init individum with random x,y in [-2,2]
+        Args:
+            func (Callable): fitness funciton taking x,y params
+        """
+        self.w = Model()
+        self.fitness = func
+        self.last_fitness = 0
+
+    def eval(self) -> float:
+        """evaluate fitness of this individuum
+        Returns:
+            [float]: fitness score (higher better)
+        """
+        self.last_fitness = self.fitness(self.w)
+        return self.last_fitness
+
+    def mutate(self, sigma=0.1):
+        """mutate by drawing from ndist around current value with sigma"""
+        for p in self.w.parameters():
+            p += torch.randn_like(p)/100
+
+def xover(a: Actor, b: Actor) -> Actor:
+    """crossover between two individuals by randomly-weighted linear interpolation between their respective coefficients
+    Args:
+        a (Actor): parent a
+        b (Actor): parent b
+    Returns:
+        Actor: child c
+    """
+    c = Actor(fittness_eval)
+    
+    for p in zip(c.w.parameters(), a.w.parameters(), b.w.parameters()):
+        rel = torch.rand_like(p[0].data).cuda()
+        p[0].data.copy_(rel * p[1].data + (1 - rel) * p[2].data)
+    return c
+
+# Main loop:
+def fittness_eval(model, do_inf=False):
+    ball = Ball(yellow)
+    points = 0
+    reflected = 0
+    startTime = time.time()   
+    while time.time() != -1:
+        # Read the sensors:
+        # Enter here functions to read sensor data, like:
+        #  val = ds.getValue()
+        if do_inf == False:
+            theTime = time.time() - startTime
+            
+            if theTime > 60 or (reflected/(1+theTime) < 1/60 and theTime > 60*3):
+                reward = points + reflected/30.0
+                print(f"finished with {reflected} points after {int(theTime/60)} minutes")
+                return reflected
+        
+        with torch.no_grad():
+            state = tick_board(ball)
+            action = model.forward(state)[0].cpu().numpy()
+
+        rightPaddle.move(action)
+        
+        score, matching = after_tick(ball)
+        points += score
+        reflected += matching
+
+# Enter here exit cleanup code.
+
+model = Model()
+torch.save(model, "models/best.pth")
+fittness_eval(model, False)
+popsize = 50
+maxgen = 500
+use_elitism = True
+allow_self_reproduction = True
+pop = [Actor(fittness_eval) for i in range(popsize*2)]
+pop[0].w = torch.load("models/best.pth")
+for gen in range(maxgen):
+    pop.sort(key=lambda p0: p0.eval(), reverse=True)
+    best = pop[0]
+    print(f"{gen}: fitness: {best.last_fitness} avg: {np.average([p.last_fitness for p in pop])}")
+    torch.save(best.w, "models/best.pth")
+
+    # cross over top 10 Actors of old pop
+    pop = pop[0:10]
+    new_pop = []
+    for a in pop:
+        for b in pop:
+            if allow_self_reproduction == False and a == b:
+                continue
+            new_ind = xover(a, b)
+            new_ind.mutate()
+            new_pop.append(new_ind)
+    random.shuffle(new_pop)
+    new_pop  = new_pop[0:popsize]
+    if use_elitism:
+        pop = pop[0:1] + new_pop
+    else:
+        pop = new_pop
