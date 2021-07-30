@@ -17,6 +17,19 @@
 #
 # -----------------------------------------------------------------------------
 
+# Own Parts for the Assigment are:
+#
+# The rulebased paddle control of the left paddle (line 81 to 96)
+# and everything from line 311 onwards
+# in between you will find the implementation of the game Pong
+# tick_board() and after_tick() are modified game functions to let my algorithms 
+# react to what is happining inside the game
+# 
+# the genetic algorithm is a modified version of the gentic collector bot
+# implementation for webots: https://github.com/maschere/ai-lecture/blob/main/webots/controllers/genetic_collector/genetic_collector.py
+# by Prof. Dr. Maximilian Scherer
+# and adjusted to the Pong usecase as well es some needed finetuning for the new enviroment
+
 import pygame
 import sys
 import random
@@ -363,13 +376,13 @@ class Model(nn.Module):
 class Actor():
     """individium class"""
 
-    def __init__(self, func: Callable):
+    def __init__(self, function: Callable):
         """init individum with random x,y in [-2,2]
         Args:
-            func (Callable): fitness funciton taking x,y params
+            function (Callable): takes to parameters for the fitness function
         """
         self.w = Model()
-        self.fitness = func
+        self.fitness = function
         self.last_fitness = 0
 
     def eval(self) -> float:
@@ -405,25 +418,26 @@ def fittness_eval(model, do_inf=False):
     ball = Ball(yellow)
     points = 0
     reflected = 0
-    startTime = time.time()   
-    while time.time() != -1:
-        # Read the sensors:
-        # Enter here functions to read sensor data, like:
-        #  val = ds.getValue()
+    startTime = pygame.time.get_ticks()   
+    while True:
+
         if do_inf == False:
-            theTime = time.time() - startTime
+            theTime = pygame.time.get_ticks() - startTime
             
             if theTime > 60 or (reflected/(1+theTime) < 1/60 and theTime > 60*3):
                 reward = points + reflected/30.0
                 print(f"finished with {reflected} points after {int(theTime/60)} minutes")
                 return reflected
         
+        # Get the current state of the game, build a action from it
         with torch.no_grad():
             state = tick_board(ball)
             action = model.forward(state)[0].cpu().numpy()
 
+        # and then perform that action
         rightPaddle.move(action)
         
+        # before the game resums and rewards are given for that action
         score, matching = after_tick(ball)
         points += score
         reflected += matching
@@ -432,13 +446,17 @@ def fittness_eval(model, do_inf=False):
 
 model = Model()
 torch.save(model, "models/best.pth")
+
 fittness_eval(model, False)
+
 popsize = 50
 maxgen = 500
 use_elitism = True
 allow_self_reproduction = True
+
 pop = [Actor(fittness_eval) for i in range(popsize*2)]
 pop[0].w = torch.load("models/best.pth")
+
 for gen in range(maxgen):
     pop.sort(key=lambda p0: p0.eval(), reverse=True)
     best = pop[0]
