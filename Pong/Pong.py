@@ -41,7 +41,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from collections import deque
-from random import random, randint, sample
+from random import random, randint, sample, shuffle
 from typing import Callable
 import time
 
@@ -410,7 +410,7 @@ def xover(a: Actor, b: Actor) -> Actor:
     
     for p in zip(c.w.parameters(), a.w.parameters(), b.w.parameters()):
         rel = torch.rand_like(p[0].data).cuda()
-        p[0].data.copy_(rel * p[1].data + (1 - rel) * p[2].data)
+        p[0].data.copy_(rel * p[1].data.cuda() + (1 - rel) * p[2].data.cuda())
     return c
 
 # Main loop:
@@ -445,7 +445,8 @@ def fittness_eval(model, do_inf=False):
 # Enter here exit cleanup code.
 
 model = Model()
-torch.save(model, "models/best.pth")
+torch.load("models/best.pth")
+# torch.save(model, "models/best.pth")
 
 fittness_eval(model, False)
 
@@ -473,7 +474,7 @@ for gen in range(maxgen):
             new_ind = xover(a, b)
             new_ind.mutate()
             new_pop.append(new_ind)
-    random.shuffle(new_pop)
+    shuffle(new_pop)
     new_pop  = new_pop[0:popsize]
     if use_elitism:
         pop = pop[0:1] + new_pop
