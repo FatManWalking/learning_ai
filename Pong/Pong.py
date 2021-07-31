@@ -261,7 +261,7 @@ def after_tick(ball):
     pygame.display.update()
     clock.tick(40)
 
-    return scoreRight, reflect
+    return scoreRight, scoreLeft, reflect
 
 class Model(nn.Module):
     
@@ -269,11 +269,11 @@ class Model(nn.Module):
         super().__init__()
         
         self.fc = nn.Sequential(
-            nn.Linear(5, 64),
+            nn.Linear(5, 32),
             nn.ReLU(),
-            nn.Linear(64, 32),
+            nn.Linear(32, 32),
             nn.ReLU(),
-            nn.Linear(32, 3),
+            nn.Linear(32, 2),
             nn.Tanh(),
         )
 
@@ -344,29 +344,32 @@ def fittness_eval(model, do_inf=False):
             theTime = pygame.time.get_ticks() - startTime
             
             if theTime>60 or points == 5:
-                reward = points + hit
+                reward = points + hit - antiscore
                 print(f"finished with {reward} points after {int(theTime/60)} minutes")
                 return reward
         
         # Get the current state of the game, build a action from it
         with torch.no_grad():
             state = tick_board(ball)
-            action = model.forward(state)[0].cpu().numpy()
+            action = np.argmax(model.forward(state).cpu().numpy())
+            # print(action)
+            rightPaddle.move(action)
         pygame.display.update()
         clock.tick(40)
         # and then perform that action
         rightPaddle.move(action)
         
         # before the game resums and rewards are given for that action
-        score, reflect = after_tick(ball)
-        points += score
+        score, antiscore, reflect = after_tick(ball)
+        points += score - antiscore
         hit += reflect
 
 # Enter here exit cleanup code.
 
 model = Model()
-torch.load("models/best.pth")
-# torch.save(model, "models/best.pth")
+
+# torch.load("models/best.pth")
+torch.save(model, "models/best.pth")
 
 fittness_eval(model, False)
 

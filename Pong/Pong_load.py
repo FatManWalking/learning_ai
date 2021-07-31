@@ -1,34 +1,4 @@
-# -----------------------------------------------------------------------------
-# Die Implementierung des Spiels habe ich aus: https://github.com/jatinmandav/Gaming-in-Python/blob/master/Pong/Pong.py
-# Seine Credits:
-#
-# Pong
-# Language - Python
-# Modules - pygame, sys, random, math
-#
-# Controls - Arrow Keys for Right Paddle and WASD Keys for Left Paddle
-#
-# By - Jatin Kumar Mandav
-#
-# Website - https://jatinmandav.wordpress.com
-#
-# YouTube Channel - https://www.youtube.com/channel/UCdpf6Lz3V357cIZomPwjuFQ
-# Twitter - @jatinmandav
-#
-# -----------------------------------------------------------------------------
-
-# Own Parts for the Assigment are:
-#
-# The rulebased paddle control of the left paddle (line 81 to 96)
-# and everything from line 311 onwards
-# in between you will find the implementation of the game Pong
-# tick_board() and after_tick() are modified game functions to let my algorithms 
-# react to what is happining inside the game
-# 
-# the genetic algorithm is a modified version of the gentic collector bot
-# implementation for webots: https://github.com/maschere/ai-lecture/blob/main/webots/controllers/genetic_collector/genetic_collector.py
-# by Prof. Dr. Maximilian Scherer
-# and adjusted to the Pong usecase as well es some needed finetuning for the new enviroment
+# This version is meant to test the resulting agent
 
 import pygame
 import sys
@@ -311,8 +281,8 @@ def board():
         clock.tick(40)
 
 def modelbased(ball):
-    state = torch.FloatTensor([ball.y, ball.x, ball.angle, leftPaddle.y, rightPaddle.x])
-    action = model.forward(state)[0].cpu().numpy()
+    state = torch.FloatTensor([ball.y, ball.x, ball.angle, leftPaddle.y, rightPaddle.y])
+    action = np.argmax(model.forward(state).cpu().numpy())
     # print(action)
     rightPaddle.move(action)
 
@@ -323,11 +293,11 @@ class Model(nn.Module):
         super().__init__()
         
         self.fc = nn.Sequential(
-            nn.Linear(5, 64),
+            nn.Linear(5, 32),
             nn.ReLU(),
-            nn.Linear(64, 32),
+            nn.Linear(32, 32),
             nn.ReLU(),
-            nn.Linear(32, 3),
+            nn.Linear(32, 2),
             nn.Tanh(),
         )
 
@@ -343,6 +313,7 @@ class Model(nn.Module):
                 
     def forward(self, x):
         x = self.fc(x)
+
         return x
 
 model = Model()
