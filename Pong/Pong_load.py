@@ -20,7 +20,7 @@
 # Own Parts for the Assigment are:
 #
 # The rulebased paddle control of the left paddle (line 81 to 96)
-# and everything from line 235 onwards
+# and everything from line 311 onwards
 # in between you will find the implementation of the game Pong
 # tick_board() and after_tick() are modified game functions to let my algorithms 
 # react to what is happining inside the game
@@ -88,7 +88,7 @@ def rulebased(ball):
     if leftPaddle.y-margin <= ball.y <= leftPaddle.y+margin:
         leftChange = 0
     else:
-        if leftPaddle.y+margin < ball.y:
+        if leftPaddle.y+40 < ball.y:
             leftChange = 1
         else:
             leftChange = -1
@@ -118,10 +118,10 @@ def boundary():
     
 # Paddle Class 
 class Paddle:
-    def __init__(self, position, speed):
+    def __init__(self, position):
         self.w = 20
         self.h = self.w*4
-        self.paddleSpeed = speed
+        self.paddleSpeed = 20
             
         if position == -1:
             self.x = 1.5*margin
@@ -143,8 +143,8 @@ class Paddle:
             self.y -= self.paddleSpeed*ydir
 
 
-leftPaddle = Paddle(-1, 80)
-rightPaddle = Paddle(1, 100)
+leftPaddle = Paddle(-1)
+rightPaddle = Paddle(1)
 
 # Ball Class
 class Ball:
@@ -157,7 +157,7 @@ class Ball:
         if randint(0, 1):
             self.angle += 180
         
-        self.speed = 100
+        self.speed = 20
 
     # Show the Ball
     def show(self):
@@ -217,8 +217,6 @@ class Ball:
                     self.angle = 150
                 if rightPaddle.y + 70 < self.y < rightPaddle.y + 80 or rightPaddle.y + 70 < self.y + self.r< rightPaddle.y + 80:
                      self.angle = 135
-                return 1
-        return 0
 
 # Show the Score
 def showScore():
@@ -228,40 +226,96 @@ def showScore():
     display.blit(leftScoreText, (3*margin, 3*margin))
     display.blit(rightScoreText, (width/2 + 3*margin, 3*margin))
 
+# Game Over
+def gameOver():
+    if scoreLeft == maxScore or scoreRight == maxScore:
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    close()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_q:
+                        close()
+                    if event.key == pygame.K_r:
+                        reset()
+            if scoreLeft == maxScore:
+                playerWins = largeFont.render("Left Player Wins!", True, red)
+            elif scoreRight == maxScore:
+                playerWins = largeFont.render("Right Player Wins!", True, blue)
+
+            display.blit(playerWins, (width/2 - 100, height/2))
+            pygame.display.update()
+            clock.tick(40)
+
+def reset():
+    global scoreLeft, scoreRight
+    scoreLeft = 0
+    scoreRight = 0
+    board()
+
+
 def close():
     pygame.quit()
     sys.exit()
 
-def tick_board(ball):
-
-    ball.move()
-    rulebased(ball)
-
-    pygame.display.update()
-    clock.tick(40)
-    return torch.FloatTensor([ball.y, ball.x, ball.angle, leftPaddle.y, rightPaddle.y])
-
-def after_tick(ball):
+def board():
+    loop = True
+    leftChange = 0
+    rightChange = 0
+    ball = Ball(yellow)
     
-    pygame.display.update()
-    clock.tick(40)
-    
-    reflect = ball.checkForPaddle() 
-    
-    display.fill(background)
-    showScore()
+    while loop:
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                close()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    close()
+                if event.key == pygame.K_SPACE or event.key == pygame.K_p:
+                    Pause()
+                if event.key == pygame.K_r:
+                    reset()
+                if event.key == pygame.K_w:
+                    leftChange = -1
+                if event.key == pygame.K_s:
+                    leftChange = 1
+                if event.key == pygame.K_UP:
+                    rightChange = -1
+                if event.key == pygame.K_DOWN:
+                    rightChange = 1
+            if event.type == pygame.KEYUP:
+                leftChange = 0
+                rightChange = 0
 
-    ball.show()
-    leftPaddle.show()
-    rightPaddle.show()
-    # global scoreRight, scoreLeft
+        leftPaddle.move(leftChange)
+        rightPaddle.move(rightChange)
+        ball.move()
+        rulebased(ball)
+        modelbased(ball)
+        
+        ball.checkForPaddle() 
+        
+        display.fill(background)
+        showScore()
 
-    boundary()
-    
-    pygame.display.update()
-    clock.tick(40)
+        ball.show()
+        leftPaddle.show()
+        rightPaddle.show()
 
-    return scoreRight, reflect
+        boundary()
+
+        gameOver()
+        
+        pygame.display.update()
+        clock.tick(40)
+
+def modelbased(ball):
+    state = torch.FloatTensor([ball.y, ball.x, ball.angle, leftPaddle.y, rightPaddle.x])
+    action = model.forward(state)[0].cpu().numpy()
+    # print(action)
+    rightPaddle.move(action)
+
 
 class Model(nn.Module):
     
@@ -289,114 +343,9 @@ class Model(nn.Module):
                 
     def forward(self, x):
         x = self.fc(x)
-
         return x
-
-class Actor():
-    """individium class"""
-
-    def __init__(self, function: Callable):
-        """init individum with random x,y in [-2,2]
-        Args:
-            function (Callable): takes to parameters for the fitness function
-        """
-        self.w = Model()
-        self.fitness = function
-        self.last_fitness = 0
-
-    def eval(self) -> float:
-        """evaluate fitness of this individuum
-        Returns:
-            [float]: fitness score (higher better)
-        """
-        self.last_fitness = self.fitness(self.w)
-        return self.last_fitness
-
-    def mutate(self, sigma=0.1):
-        """mutate by drawing from ndist around current value with sigma"""
-        for p in self.w.parameters():
-            p += torch.randn_like(p)/100
-
-def xover(a: Actor, b: Actor) -> Actor:
-    """crossover between two individuals by randomly-weighted linear interpolation between their respective coefficients
-    Args:
-        a (Actor): parent a
-        b (Actor): parent b
-    Returns:
-        Actor: child c
-    """
-    c = Actor(fittness_eval)
-    
-    for p in zip(c.w.parameters(), a.w.parameters(), b.w.parameters()):
-        rel = torch.rand_like(p[0].data).cuda()
-        p[0].data.copy_(rel * p[1].data.cuda() + (1 - rel) * p[2].data.cuda())
-    return c
-
-# Main loop:
-def fittness_eval(model, do_inf=False):
-    ball = Ball(yellow)
-    points = 0
-    hit = 0
-    startTime = pygame.time.get_ticks()   
-    while True:
-
-        if do_inf == False:
-            theTime = pygame.time.get_ticks() - startTime
-            
-            if theTime>60 or points == 5:
-                reward = points + hit
-                print(f"finished with {reward} points after {int(theTime/60)} minutes")
-                return reward
-        
-        # Get the current state of the game, build a action from it
-        with torch.no_grad():
-            state = tick_board(ball)
-            action = model.forward(state)[0].cpu().numpy()
-        pygame.display.update()
-        clock.tick(40)
-        # and then perform that action
-        rightPaddle.move(action)
-        
-        # before the game resums and rewards are given for that action
-        score, reflect = after_tick(ball)
-        points += score
-        hit += reflect
-
-# Enter here exit cleanup code.
 
 model = Model()
 torch.load("models/best.pth")
-# torch.save(model, "models/best.pth")
-
-fittness_eval(model, False)
-
-popsize = 20
-maxgen = 500
-use_elitism = True
-allow_self_reproduction = True
-
-pop = [Actor(fittness_eval) for i in range(popsize*2)]
-pop[0].w = torch.load("models/best.pth")
-
-for gen in range(maxgen):
-    pop.sort(key=lambda p0: p0.eval(), reverse=True)
-    best = pop[0]
-    print(f"{gen}: fitness: {best.last_fitness} avg: {np.average([p.last_fitness for p in pop])}")
-    torch.save(best.w, "models/best.pth")
-
-    # cross over top 10 Actors of old pop
-    pop = pop[0:10]
-    new_pop = []
-    for a in pop:
-        for b in pop:
-            if allow_self_reproduction == False and a == b:
-                continue
-            new_ind = xover(a, b)
-            new_ind.mutate()
-            new_pop.append(new_ind)
-    shuffle(new_pop)
-    new_pop  = new_pop[0:popsize]
-    if use_elitism:
-        pop = pop[0:1] + new_pop
-    else:
-        pop = new_pop
+# Dieser Aufruf startet das Spiel
+board()
