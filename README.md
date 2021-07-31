@@ -19,6 +19,25 @@ Hinter dem Link verbirgt sich ein selbst aufgenommer Podcast mit dem Namen "Lust
 
 Beinhaltet einen regelbasierten und einen genetischen Algorithmus, die gegen einander "Pong!" spielen.
 
+Witzigerweise lernt der Algorithmus zufällig eine Position an der er recht zuverlässig dafür sorgen konnte ein "ewiges Spiel" gegen den regelbasierten Algorithmus zu spielen:
+
+
+https://user-images.githubusercontent.com/46927512/127743294-ca8ecda7-c12b-4107-b9a0-627153ca3c81.mp4
+
+
+
+Da er sowohl für Punkte als auch für das zurückschlagen des Balles belohnt wird, ist dies auf lange Sicht natürlich ideal, denn ein ewiges Spiel bedeutet auch unendlich viele zurückgeschlagene Bälle. Habe auch noch ein paar andere Settings ausporbiert aber fand dieses Ergebnis sehr amüsant, da es wirklich zuverlaässig eintrat (siehe Video).
+
+
 ## VAE
 
 Beinhaltet einen Variational Autoencoder, welcher versucht Pixelcharaktere aus unterschiedlichen Perspektiven zu generieren.
+
+Zu sehen sind 50 Epochen Training der besten gefundenen Parameterkombination:\
+![50 Epochen Decodiert](https://user-images.githubusercontent.com/46927512/127742783-0aa6c997-865d-46a9-a5e2-3720251c48f2.png)
+
+![50 Epochen Generiert](https://user-images.githubusercontent.com/46927512/127742757-155c6d05-3edd-446e-af3c-a0e3c54ca751.png)
+
+
+
+
